@@ -57,7 +57,7 @@ if gt is None or rt is None:
 
 comparison = build_comparison(gt, rt)
 
-if comparison.empty or "original_metadata" not in comparison.columns:
+if comparison.empty or "ground_truth_odia" not in comparison.columns:
     gt_deeds = sorted(set(gt["deed_number"])) if gt is not None else []
     rt_deeds = sorted(set(rt["reg_no"])) if rt is not None else []
     overlap = sorted(set(gt_deeds) & set(rt_deeds))
@@ -70,6 +70,28 @@ if comparison.empty or "original_metadata" not in comparison.columns:
     st.write(f"**realtime_fields_gt.csv reg_nos ({len(rt_deeds)}):** {rt_deeds[:20]}")
     st.write(f"**Overlapping deeds:** {overlap if overlap else 'NONE — upload matching files'}")
     st.stop()
+
+
+def _blank(s: str) -> bool:
+    return str(s).strip() in ("", "nan")
+
+
+# Reclassify "both-blank": build_comparison's own both-blank check uses the
+# ORIGINAL DB metadata (irrelevant here — this experiment sends a DIFFERENT
+# anchor: corrected_english, falling back to corrected_odia). A row should
+# only be "nothing to locate" if BOTH corrected_english AND corrected_odia
+# were blank (meaning THIS script had nothing to send either); if ground
+# truth actually has an Odia value but Gemini still came back empty, that's
+# a genuine miss, not "nothing to locate".
+def _fix_issue_type(row):
+    anchor_was_sent = not (_blank(row["ground_truth_english"]) and _blank(row["ground_truth_odia"]))
+    gemini_empty = _blank(row["fresh_gemini_odia"]) and _blank(row["fresh_gemini_readback"])
+    if row["issue_type"].startswith("both-blank") and anchor_was_sent and gemini_empty:
+        return "content mismatch"
+    return row["issue_type"]
+
+
+comparison["issue_type"] = comparison.apply(_fix_issue_type, axis=1)
 
 all_deeds_expected = sorted(set(gt["deed_number"]))
 covered_deeds = sorted(comparison["deed_number"].unique().tolist())
@@ -97,17 +119,15 @@ ddf = comparison[comparison["deed_number"] == choice].copy()
 
 view = ddf[[
     "field",
-    "original_metadata",
-    "fresh_gemini_odia", "fresh_gemini_readback",
     "ground_truth_odia", "ground_truth_readback",
+    "fresh_gemini_odia", "fresh_gemini_readback",
     "issue_type",
 ]].rename(columns={
     "field": "Field",
-    "original_metadata": "Anchor Sent (ground truth's own English)",
+    "ground_truth_odia": "Ground Truth / Anchor Sent (Odia)",
+    "ground_truth_readback": "Ground Truth Readback (EN)",
     "fresh_gemini_odia": "Gemini Output (Odia)",
     "fresh_gemini_readback": "Gemini Readback (EN)",
-    "ground_truth_odia": "Ground Truth (Odia)",
-    "ground_truth_readback": "Ground Truth Readback (EN)",
     "issue_type": "Status",
 })
 
