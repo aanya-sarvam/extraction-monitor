@@ -147,6 +147,22 @@ def g_readbacks(g, fid, attr=None):
     return out
 
 
+def g_odia(g, fid, attr=None):
+    """odia_text for fields that have an english value, in the SAME order as
+    g_fields -> so it lines up 1:1 with the english list."""
+    out = []
+    for f in g["fields"]:
+        if f["id"] == fid and (attr is None or f["attr"] == attr):
+            if (f["english_value"] or "").strip():
+                out.append((f.get("odia_text") or "").strip())
+    return out
+
+
+def g_odia_scalar(g, fid):
+    v = g_odia(g, fid)
+    return v[0] if v else ""
+
+
 def build_g(reg_no, rows):
     fields = []
     book = ""
@@ -166,6 +182,7 @@ def compare_deed(g, api):
 
     def scalar_row(label, gid, akey, kind="text"):
         gv = g_scalar(g, gid)
+        god = g_odia_scalar(g, gid)
         av = str(api.get(akey) or "")
         rb = " / ".join(g_readbacks(g, gid))
         if not gv or not av:
@@ -181,7 +198,7 @@ def compare_deed(g, api):
                        or norm(av) in norm(gv) or ratio(gv, av) >= CAT_THRESHOLD)
         else:
             verdict = (norm(gv) == norm(av))
-        rows.append((label, av, gv, rb, verdict))
+        rows.append((label, av, god, gv, rb, verdict))
 
     scalar_row("Deed type", "deed_type", "deedType", "category")
     scalar_row("District", "district", "district", "place")
@@ -193,6 +210,7 @@ def compare_deed(g, api):
     for label, gid, akey in [("Sellers", "seller_details", "sellerDetails"),
                              ("Buyers", "buyer_details", "buyerDetails")]:
         gnames = g_fields(g, gid, attr="name")
+        godia = g_odia(g, gid, attr="name")
         anames = parse_parties(api.get(akey))
         rb = g_readbacks(g, gid, attr="name")
         if not gnames and not anames:
@@ -201,7 +219,7 @@ def compare_deed(g, api):
         note = ""
         if info["grounding_count"] != info["registry_count"]:
             note = f"  (count {info['grounding_count']} vs {info['registry_count']})"
-        rows.append((label, "\n".join(anames) or "—",
+        rows.append((label, "\n".join(anames) or "—", "\n".join(godia) or "—",
                      ("\n".join(gnames) or "—") + note, "\n".join(rb), ok))
 
     aprops = parse_property(api.get("propertyDetails"))
@@ -212,12 +230,14 @@ def compare_deed(g, api):
         aplot = {digits(p["plot"]) for p in aprops if digits(p["plot"])}
         k_ok = (not gkhata) or bool({digits(x) for x in gkhata} & akhata)
         p_ok = (not gplot) or bool({digits(x) for x in gplot} & aplot)
+        gkhata_od = g_odia(g, "property_details", attr="khata")
+        gplot_od = g_odia(g, "property_details", attr="plot")
         rows.append(("Khata", ", ".join(str(x) for x in sorted(akhata)) or "—",
-                     ", ".join(gkhata) or "—", "", k_ok))
+                     ", ".join(gkhata_od) or "—", ", ".join(gkhata) or "—", "", k_ok))
         rows.append(("Plot", ", ".join(str(x) for x in sorted(aplot)) or "—",
-                     ", ".join(gplot) or "—", "", p_ok))
+                     ", ".join(gplot_od) or "—", ", ".join(gplot) or "—", "", p_ok))
 
-    has_mismatch = any(v is False for _, _, _, _, v in rows)
+    has_mismatch = any(row[-1] is False for row in rows)
     return rows, has_mismatch
 
 
@@ -245,12 +265,13 @@ def render_deed(reg_no, g, rows, has_mismatch):
         unsafe_allow_html=True)
     head = ("<tr style='text-align:left;border-bottom:2px solid #999;"
             "background:#fff;color:#111'>"
-            "<th style='padding:6px 10px;width:14%;color:#111'>Field</th>"
-            "<th style='padding:6px 10px;width:30%;color:#111'>Original (registry)</th>"
-            "<th style='padding:6px 10px;width:30%;color:#111'>Gemini</th>"
-            "<th style='padding:6px 10px;width:26%;color:#111'>Gemini readback</th></tr>")
+            "<th style='padding:6px 10px;width:11%;color:#111'>Field</th>"
+            "<th style='padding:6px 10px;width:24%;color:#111'>Original (registry)</th>"
+            "<th style='padding:6px 10px;width:22%;color:#111'>Gemini (Odia)</th>"
+            "<th style='padding:6px 10px;width:23%;color:#111'>Gemini (English)</th>"
+            "<th style='padding:6px 10px;width:20%;color:#111'>Readback</th></tr>")
     body = ""
-    for label, orig, gem, rb, verdict in rows:
+    for label, orig, gem_odia, gem_eng, rb, verdict in rows:
         if verdict is False:
             bg, fg = "#fdecea", "#7a1c12"      # red row, dark red text
         elif verdict is True:
@@ -261,7 +282,8 @@ def render_deed(reg_no, g, rows, has_mismatch):
                  f"vertical-align:top'>"
                  f"<td style='padding:6px 10px;font-weight:700;color:{fg}'>{_cell(label)}</td>"
                  f"<td style='padding:6px 10px;color:{fg}'>{_cell(orig)}</td>"
-                 f"<td style='padding:6px 10px;color:{fg}'>{_cell(gem)}</td>"
+                 f"<td style='padding:6px 10px;color:{fg};font-size:1.05em'>{_cell(gem_odia)}</td>"
+                 f"<td style='padding:6px 10px;color:{fg}'>{_cell(gem_eng)}</td>"
                  f"<td style='padding:6px 10px;color:{fg};opacity:0.85'>{_cell(rb)}</td></tr>")
     st.markdown(f"<table style='width:100%;border-collapse:collapse;font-size:0.9em;"
                 f"background:#fff'>"
