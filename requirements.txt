@@ -1,2 +1,2 @@
-streamlit
-pandas
+streamlit>=1.30
+pandas>=2.0
