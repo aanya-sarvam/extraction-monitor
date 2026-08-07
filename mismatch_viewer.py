@@ -243,21 +243,28 @@ def render_deed(reg_no, g, rows, has_mismatch):
         f"#### `{reg_no}` &nbsp; {badge} "
         f"<span style='color:#888;font-size:0.85em'>book: {g.get('book_label') or '—'}</span>",
         unsafe_allow_html=True)
-    head = ("<tr style='text-align:left;border-bottom:2px solid #ddd'>"
-            "<th style='padding:6px 10px;width:14%'>Field</th>"
-            "<th style='padding:6px 10px;width:30%'>Original (registry)</th>"
-            "<th style='padding:6px 10px;width:30%'>Gemini</th>"
-            "<th style='padding:6px 10px;width:26%'>Gemini readback</th></tr>")
+    head = ("<tr style='text-align:left;border-bottom:2px solid #999;"
+            "background:#fff;color:#111'>"
+            "<th style='padding:6px 10px;width:14%;color:#111'>Field</th>"
+            "<th style='padding:6px 10px;width:30%;color:#111'>Original (registry)</th>"
+            "<th style='padding:6px 10px;width:30%;color:#111'>Gemini</th>"
+            "<th style='padding:6px 10px;width:26%;color:#111'>Gemini readback</th></tr>")
     body = ""
     for label, orig, gem, rb, verdict in rows:
-        bg = ("background:#fdecea" if verdict is False else
-              "background:#eafaf1" if verdict is True else "background:#f5f5f5")
-        body += (f"<tr style='{bg};border-bottom:1px solid #eee;vertical-align:top'>"
-                 f"<td style='padding:6px 10px;font-weight:600'>{_cell(label)}</td>"
-                 f"<td style='padding:6px 10px'>{_cell(orig)}</td>"
-                 f"<td style='padding:6px 10px'>{_cell(gem)}</td>"
-                 f"<td style='padding:6px 10px;color:#555'>{_cell(rb)}</td></tr>")
-    st.markdown(f"<table style='width:100%;border-collapse:collapse;font-size:0.9em'>"
+        if verdict is False:
+            bg, fg = "#fdecea", "#7a1c12"      # red row, dark red text
+        elif verdict is True:
+            bg, fg = "#eafaf1", "#14512e"      # green row, dark green text
+        else:
+            bg, fg = "#f0f0f0", "#333333"      # grey row, dark grey text
+        body += (f"<tr style='background:{bg};color:{fg};border-bottom:1px solid #ccc;"
+                 f"vertical-align:top'>"
+                 f"<td style='padding:6px 10px;font-weight:700;color:{fg}'>{_cell(label)}</td>"
+                 f"<td style='padding:6px 10px;color:{fg}'>{_cell(orig)}</td>"
+                 f"<td style='padding:6px 10px;color:{fg}'>{_cell(gem)}</td>"
+                 f"<td style='padding:6px 10px;color:{fg};opacity:0.85'>{_cell(rb)}</td></tr>")
+    st.markdown(f"<table style='width:100%;border-collapse:collapse;font-size:0.9em;"
+                f"background:#fff'>"
                 f"{head}{body}</table>", unsafe_allow_html=True)
     st.write("")
 
